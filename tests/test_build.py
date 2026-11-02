@@ -42,6 +42,8 @@ class BuildTests(unittest.TestCase):
             self.assertIn('id="studyend"',html)
             self.assertIn("currentFocusStudy",script)
             self.assertIn("studySessionId",script)
+            self.assertIn("const settings = await getSettings();",script)
+            self.assertIn("rec.videoEnabled = settings.enabled",script)
             self.assertIn("30*60*1000",popup)
     def test_no_remote_analytics(self):
         with zipfile.ZipFile(ZIP) as z:
