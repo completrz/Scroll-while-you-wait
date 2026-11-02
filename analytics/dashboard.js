@@ -11,6 +11,17 @@ function draw(rows) {
  $('return').textContent=fmt(median(latencies));
  $('fast').textContent=returned.length ? Math.round(latencies.filter(x=>x<=10000).length/returned.length*100)+'%' : '—';
  $('coverage').textContent=returned.length+' of '+completed.length+' completions had an observed return';
+ const sessionRows=completed.filter(r=>r.studySessionId);
+ const counts=new Map();
+ for (const r of sessionRows) {
+   if(!counts.has(r.studySessionId)) counts.set(r.studySessionId,{condition:r.condition,responses:0,returns:[]});
+   const c=counts.get(r.studySessionId);c.responses++;
+   if(r.returnLatencyMs!=null)c.returns.push(r.returnLatencyMs);
+ }
+ $('sessionsummary').textContent=counts.size ? [...counts.values()].map((v,i)=>
+    'Session '+(i+1)+' — '+(v.condition==='control'?'Normal workflow':'Video-assisted')+
+    ': '+v.responses+' responses, observed median return '+fmt(median(v.returns))).join(' | ') :
+    'No focus study sessions recorded yet.';
  const treatment=returned.filter(r=>r.condition==='treatment');
  const control=returned.filter(r=>r.condition==='control');
  $('experiment').textContent=(treatment.length+control.length) ?
@@ -38,7 +49,7 @@ async function refresh(){const {analyticsSessions=[]}=await chrome.storage.local
 $('period').addEventListener('change',refresh);
 $('export').addEventListener('click',async()=>{
  const {analyticsSessions=[]}=await chrome.storage.local.get('analyticsSessions');
- const cols=['id','platform','startedAt','completedAt','durationMs','returnLatencyMs','videoEnabled','condition'];
+ const cols=['id','platform','startedAt','completedAt','durationMs','returnLatencyMs','videoEnabled','condition','studySessionId'];
  const escape=x=>'"'+String(x??'').replaceAll('"','""')+'"';
  const csv=[cols.join(','),...analyticsSessions.map(r=>cols.map(k=>escape(r[k])).join(','))].join('\n');
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='reels-personal-analytics.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
