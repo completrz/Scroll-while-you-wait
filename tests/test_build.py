@@ -39,7 +39,7 @@ class BuildTests(unittest.TestCase):
             self.assertIn('id="researchconsent"',html)
             self.assertIn('id="researchexperiment"',html)
             self.assertIn("getExperimentAssignment",script)
-            self.assertIn("condition !== 'control'",script)
+            self.assertIn("state.generating[id] !== 'control'",script)
     def test_no_remote_analytics(self):
         with zipfile.ZipFile(ZIP) as z:
             scripts="\n".join(z.read(n).decode("utf-8") for n in z.namelist() if n.endswith(".js"))
