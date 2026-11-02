@@ -1,0 +1,48 @@
+name: Package auto-minimize into main ZIP
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - scripts/build-auto-minimize-only.py
+      - .github/workflows/update-auto-minimize-main.yml
+permissions:
+  contents: write
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build minimal extension
+        run: python scripts/build-auto-minimize-only.py
+      - name: Verify package and JavaScript
+        run: |
+          python - <<'PY'
+          import json, zipfile
+          from pathlib import Path
+          path=Path("reels-while-you-wait-auto-minimize.zip")
+          with zipfile.ZipFile(path) as z:
+              names=z.namelist()
+              base="reels-while-you-wait/"
+              for f in ("manifest.json","background.js","popup.js","popup.html"):
+                  assert base+f in names, f
+              assert json.loads(z.read(base+"manifest.json"))["manifest_version"] == 3
+              assert b"autominimize" in z.read(base+"popup.html")
+              assert not any(n.endswith("dashboard.js") for n in names)
+              z.extractall("dist")
+          PY
+          for f in dist/reels-while-you-wait/*.js; do node --check "$f"; done
+      - name: Replace original ZIP on main
+        run: |
+          mv reels-while-you-wait-auto-minimize.zip reels-while-you-wait.zip
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add reels-while-you-wait.zip
+          if ! git diff --cached --quiet; then
+            git commit -m "Package original extension with auto-minimize only"
+            git push origin HEAD:main
+          fi
