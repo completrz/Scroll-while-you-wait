@@ -27,3 +27,6 @@ restoration before replacing a published build.
 
 Do not enable ingestion or claim measured productivity benefits until the
 research workflow is reviewed and tested.
+
+## Local focus dashboard
+The build script now includes a private dashboard opened through the extension popup. Metrics include completed response durations and observed return-to-chat latencies. These are **not** equivalent to productivity gains. The metric currently records a return when the user switches back to the AI tab; users who stay on the AI tab may have no observed return. The collector is an early prototype and needs additional tests for service-worker suspension, absent return events, already-focused tabs, and multiple overlapping sessions. No analytics are uploaded. The dashboard includes local CSV export and deletion.
