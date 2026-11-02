@@ -232,7 +232,8 @@ async function getExperimentAssignment(tabId) {
     html.write_text(s)
     popup = ext / "popup.js"
     s = popup.read_text()
-    s += """\\n(async () => {
+    s += """
+(async () => {
   const opts = await chrome.storage.local.get({researchExperimentConsent:false,researchExperimentEnabled:false});
   $('researchconsent').checked = opts.researchExperimentConsent;
   $('researchexperiment').checked = opts.researchExperimentEnabled && opts.researchExperimentConsent;
@@ -245,7 +246,8 @@ async function getExperimentAssignment(tabId) {
   });
   $('researchexperiment').addEventListener('change',e=>
     chrome.storage.local.set({researchExperimentEnabled:e.target.checked}));
-})();\\n"""
+})();
+"""
     popup.write_text(s)
     with ZipFile(OUTPUT, "w", ZIP_DEFLATED) as z:
         for file in ext.rglob("*"):
