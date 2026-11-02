@@ -1,0 +1,39 @@
+"""Regression tests for the packaged extension. Run: python -m unittest discover -s tests"""
+import json
+import subprocess
+import sys
+import unittest
+import zipfile
+from pathlib import Path
+
+ROOT=Path(__file__).resolve().parents[1]
+ZIP=ROOT/"reels-while-you-wait-auto-minimize.zip"
+
+class BuildTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        subprocess.run([sys.executable,str(ROOT/"scripts/build-auto-minimize.py")],check=True,cwd=ROOT)
+    def test_expected_files(self):
+        with zipfile.ZipFile(ZIP) as z:
+            base="reels-while-you-wait/"
+            for name in ("manifest.json","background.js","popup.js","popup.html","dashboard.js","dashboard.html","reels-controller.js","ai-detector.js"):
+                self.assertIn(base+name,z.namelist())
+    def test_manifest(self):
+        with zipfile.ZipFile(ZIP) as z:
+            manifest=json.loads(z.read("reels-while-you-wait/manifest.json"))
+            self.assertEqual(manifest["manifest_version"],3)
+            self.assertEqual(manifest["version"],"1.2.0")
+            self.assertEqual(len(manifest["content_scripts"]),2)
+    def test_no_remote_analytics(self):
+        with zipfile.ZipFile(ZIP) as z:
+            scripts="\n".join(z.read(n).decode("utf-8") for n in z.namelist() if n.endswith(".js"))
+            self.assertNotIn("supabase.co",scripts)
+            self.assertNotIn("/ingest",scripts)
+    def test_controls(self):
+        with zipfile.ZipFile(ZIP) as z:
+            html=z.read("reels-while-you-wait/popup.html").decode()
+            self.assertIn('id="autominimize"',html)
+            self.assertIn('id="dashboard"',html)
+
+if __name__=="__main__":
+    unittest.main()
