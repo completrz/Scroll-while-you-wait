@@ -180,7 +180,7 @@ async function currentFocusStudy() {
   const { focusStudy = null } = await chrome.storage.local.get('focusStudy');
   if (!focusStudy || !focusStudy.consent || !focusStudy.active) return null;
   if (Date.now() >= focusStudy.endsAt) {
-    await chrome.storage.local.set({focusStudy: {...focusStudy, active:false, endedAt:Date.now()}});
+    await chrome.storage.local.set({focusStudy: {...focusStudy, active:false, completed:Math.min(2,(focusStudy.completed||0)+1), endedAt:Date.now()}});
     return null;
   }
   return focusStudy;
@@ -240,7 +240,13 @@ async function studyCondition() {
   const status = $('studystatus');
   async function refreshStudy() {
     const { focusStudy = null } = await chrome.storage.local.get('focusStudy');
-    const active = !!(focusStudy && focusStudy.active && Date.now() < focusStudy.endsAt);
+    let active = !!(focusStudy && focusStudy.active && Date.now() < focusStudy.endsAt);
+    if (focusStudy?.active && !active) {
+      focusStudy.active = false;
+      focusStudy.completed = Math.min(2,(focusStudy.completed||0)+1);
+      focusStudy.endedAt = Date.now();
+      await chrome.storage.local.set({focusStudy});
+    }
     consent.checked = !!focusStudy?.consent;
     start.disabled = !consent.checked || active || (focusStudy?.completed || 0) >= 2;
     end.disabled = !active;
@@ -275,6 +281,9 @@ async function studyCondition() {
     await chrome.storage.local.set({focusStudy:{...focusStudy,active:false,
       completed:Math.min(2,(focusStudy.completed||0)+1),endedAt:Date.now()}});
     await refreshStudy();
+  });
+  chrome.storage.onChanged.addListener((changes,area)=>{
+    if(area==='local' && changes.focusStudy) refreshStudy();
   });
   await refreshStudy();
 })();
