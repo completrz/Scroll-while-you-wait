@@ -4,7 +4,9 @@
 const reply=(message,status=200)=>new Response(JSON.stringify({message}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
 export default {
  async fetch(req,env){
-  if(req.method!=='POST'||new URL(req.url).pathname!=='/ingest')return reply('Not found',404);
+  const endpoint=new URL(req.url).pathname;
+  if(!['/ingest','/consent','/withdraw'].includes(endpoint))return reply('Not found',404);
+  if(endpoint==='/withdraw' ? req.method!=='DELETE' : req.method!=='POST')return reply('Method not allowed',405);
   if(env.ENABLE_INGESTION!=='true')return reply('Collection disabled',503);
   if(!env.SUPABASE_URL||!env.SUPABASE_ANON_KEY||!env.SUPABASE_SERVICE_ROLE_KEY)return reply('Not configured',503);
   const token=(req.headers.get('Authorization')||'').replace(/^Bearer /,'');
@@ -13,6 +15,30 @@ export default {
   if(!auth.ok)return reply('Unauthorized',401);
   const user=await auth.json();
   if(!user.id)return reply('Unauthorized',401);
+  const dbHeaders={apikey:env.SUPABASE_SERVICE_ROLE_KEY,
+    Authorization:'Bearer '+env.SUPABASE_SERVICE_ROLE_KEY,'Content-Type':'application/json'};
+  if(endpoint==='/withdraw'){
+    const withdrawn=await fetch(env.SUPABASE_URL+'/rest/v1/research_consent?participant_id=eq.'+encodeURIComponent(user.id),
+      {method:'PATCH',headers:{...dbHeaders,Prefer:'return=minimal'},body:JSON.stringify({withdrawn_at:new Date().toISOString()})});
+    if(!withdrawn.ok)return reply('Withdrawal failed',502);
+    const deleted=await fetch(env.SUPABASE_URL+'/rest/v1/research_events?participant_id=eq.'+encodeURIComponent(user.id),
+      {method:'DELETE',headers:{...dbHeaders,Prefer:'return=minimal'}});
+    return deleted.ok?reply('Consent withdrawn and events deleted'):reply('Withdrawal recorded; deletion needs retry',502);
+  }
+  if(endpoint==='/consent'){
+    let body;try{body=await req.json()}catch{return reply('Invalid JSON',400)}
+    if(body?.consent!==true||body?.policyVersion!=='v1')return reply('Explicit consent required',403);
+    const stored=await fetch(env.SUPABASE_URL+'/rest/v1/research_consent?on_conflict=participant_id',
+      {method:'POST',headers:{...dbHeaders,Prefer:'resolution=merge-duplicates,return=minimal'},
+       body:JSON.stringify({participant_id:user.id,policy_version:'v1',consented_at:new Date().toISOString(),withdrawn_at:null})});
+    return stored.ok?reply('Consent registered'):reply('Consent storage failed',502);
+  }
+  const permission=await fetch(env.SUPABASE_URL+'/rest/v1/research_consent?participant_id=eq.'+
+    encodeURIComponent(user.id)+'&withdrawn_at=is.null&select=participant_id&limit=1',
+    {headers:dbHeaders});
+  if(!permission.ok)return reply('Consent unavailable',503);
+  const active=await permission.json();
+  if(!active.length)return reply('No active server-side consent',403);
   if(Number(req.headers.get('content-length')||0)>25000)return reply('Too large',413);
   let input;try{input=await req.json()}catch{return reply('Invalid JSON',400)}
   if(!input||input.consented!==true||!Array.isArray(input.events)||input.events.length>20)return reply('Consent required',403);
