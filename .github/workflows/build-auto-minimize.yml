@@ -1,0 +1,35 @@
+name: Build auto-minimize extension
+on:
+  push:
+    branches: [feature/auto-minimize-and-analytics]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build extension ZIP
+        run: python scripts/build-auto-minimize.py
+      - name: Verify ZIP contents and JS syntax
+        run: |
+          python - <<'PY'
+          import zipfile, json
+          from pathlib import Path
+          path = Path("reels-while-you-wait-auto-minimize.zip")
+          with zipfile.ZipFile(path) as f:
+              names = f.namelist()
+              base = "reels-while-you-wait/"
+              for name in ("manifest.json", "background.js", "ai-detector.js", "reels-controller.js", "popup.js", "popup.html"):
+                  assert base + name in names, name
+              manifest = json.loads(f.read(base + "manifest.json"))
+              assert manifest["version"] == "1.2.0"
+              f.extractall("dist")
+          PY
+          for script in dist/reels-while-you-wait/*.js; do node --check "$script"; done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reels-while-you-wait-auto-minimize
+          path: reels-while-you-wait-auto-minimize.zip
