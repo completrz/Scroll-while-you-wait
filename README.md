@@ -1,3 +1,4 @@
+![Reels While You Wait](assets/banner.png)
 # Reels While You Wait
 
 A Chrome extension that plays short-form video while an AI chatbot is thinking, and pauses it the moment the answer is ready.
