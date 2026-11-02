@@ -11,6 +11,15 @@ function draw(rows) {
  $('return').textContent=fmt(median(latencies));
  $('fast').textContent=returned.length ? Math.round(latencies.filter(x=>x<=10000).length/returned.length*100)+'%' : '—';
  $('coverage').textContent=returned.length+' of '+completed.length+' completions had an observed return';
+ const treatment=returned.filter(r=>r.condition==='treatment');
+ const control=returned.filter(r=>r.condition==='control');
+ $('experiment').textContent=(treatment.length+control.length) ?
+   'Experimental observed returns — video on: '+treatment.length+
+   ' (median '+fmt(median(treatment.map(r=>r.returnLatencyMs)))+
+   '), video off: '+control.length+' (median '+fmt(median(control.map(r=>r.returnLatencyMs)))+
+   '). This is descriptive, not proof of an effect.' :
+   'No A/B experiment observations yet. The experiment is optional.';
+
  const recentEnd=Date.now(), week=7*86400000;
  const current=completed.filter(r=>r.completedAt>=recentEnd-week && r.returnLatencyMs!=null).map(r=>r.returnLatencyMs);
  const previous=completed.filter(r=>r.completedAt>=recentEnd-2*week && r.completedAt<recentEnd-week && r.returnLatencyMs!=null).map(r=>r.returnLatencyMs);
@@ -29,7 +38,7 @@ async function refresh(){const {analyticsSessions=[]}=await chrome.storage.local
 $('period').addEventListener('change',refresh);
 $('export').addEventListener('click',async()=>{
  const {analyticsSessions=[]}=await chrome.storage.local.get('analyticsSessions');
- const cols=['id','platform','startedAt','completedAt','durationMs','returnLatencyMs','videoEnabled'];
+ const cols=['id','platform','startedAt','completedAt','durationMs','returnLatencyMs','videoEnabled','condition'];
  const escape=x=>'"'+String(x??'').replaceAll('"','""')+'"';
  const csv=[cols.join(','),...analyticsSessions.map(r=>cols.map(k=>escape(r[k])).join(','))].join('\n');
  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download='reels-personal-analytics.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
