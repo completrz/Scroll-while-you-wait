@@ -24,6 +24,13 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(manifest["manifest_version"],3)
             self.assertEqual(manifest["version"],"1.2.0")
             self.assertEqual(len(manifest["content_scripts"]),2)
+    def test_weekly_comparison_ui(self):
+        with zipfile.ZipFile(ZIP) as z:
+            base="reels-while-you-wait/"
+            html=z.read(base+"dashboard.html").decode()
+            js=z.read(base+"dashboard.js").decode()
+            self.assertIn('id="week"', html)
+            self.assertIn("previous 7 days", js)
     def test_no_remote_analytics(self):
         with zipfile.ZipFile(ZIP) as z:
             scripts="\n".join(z.read(n).decode("utf-8") for n in z.namelist() if n.endswith(".js"))
