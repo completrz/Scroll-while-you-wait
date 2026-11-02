@@ -198,7 +198,8 @@ async function studyCondition() {
     s = replace_one(s,
         "if (msg.generating) {",
         """if (msg.generating) {
-          state.focusStudyCondition = await studyCondition();""",
+          state.focusStudyCondition = await studyCondition();
+          const settings = await getSettings();""",
         "study playback condition")
     s = replace_one(s,
         "if (!state.generating[tab.id]) await recordAnalyticsStart(tab.id, tab);",
