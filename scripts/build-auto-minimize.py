@@ -191,7 +191,7 @@ async function getExperimentAssignment(tabId) {
     s = replace_one(s,
         "const wantsPlay = (state, settings) => settings.enabled && (state.forced || anyGenerating(state));",
         """const wantsPlay = (state, settings) => settings.enabled &&
-  (state.forced || Object.keys(state.generating).some(id => experimentAssignments.get(Number(id)) !== 'control'));""",
+  (state.forced || Object.keys(state.generating).some(id => state.generating[id] !== 'control'));""",
         "experimental playback")
     s = replace_one(s,
         "if (!state.generating[tab.id]) await recordAnalyticsStart(tab.id, tab);",
@@ -205,6 +205,10 @@ async function getExperimentAssignment(tabId) {
             }
           }""",
         "record experiment condition")
+    s = replace_one(s,
+        "state.generating[tab.id] = true;",
+        "state.generating[tab.id] = state.generating[tab.id] || (await getExperimentAssignment(tab.id));",
+        "persist A/B assignment in session state")
     s = replace_one(s,
         "if (state.generating[tab.id]) await recordAnalyticsEnd(tab.id);",
         """if (state.generating[tab.id]) await recordAnalyticsEnd(tab.id);
