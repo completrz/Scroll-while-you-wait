@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 const fmt = ms => ms == null ? '—' : ms < 1000 ? Math.round(ms) + ' ms' : (ms/1000).toFixed(1) + 's';
+const difference = (current, previous) => previous === null || previous === 0 || current === null ? null : 100 * (current - previous) / previous;
 const median = x => {const a=[...x].sort((a,b)=>a-b);return a.length ? (a[Math.floor((a.length-1)/2)]+a[Math.floor(a.length/2)])/2 : null;};
 function draw(rows) {
  const completed=rows.filter(r=>r.completedAt);
@@ -10,6 +11,12 @@ function draw(rows) {
  $('return').textContent=fmt(median(latencies));
  $('fast').textContent=returned.length ? Math.round(latencies.filter(x=>x<=10000).length/returned.length*100)+'%' : '—';
  $('coverage').textContent=returned.length+' of '+completed.length+' completions had an observed return';
+ const recentEnd=Date.now(), week=7*86400000;
+ const current=completed.filter(r=>r.completedAt>=recentEnd-week && r.returnLatencyMs!=null).map(r=>r.returnLatencyMs);
+ const previous=completed.filter(r=>r.completedAt>=recentEnd-2*week && r.completedAt<recentEnd-week && r.returnLatencyMs!=null).map(r=>r.returnLatencyMs);
+ const currMed=median(current), prevMed=median(previous), change=difference(currMed,prevMed);
+ $('week').textContent=change===null||current.length<5||previous.length<5?'Not enough observed returns in both weeks':(change>0?'+':'')+change.toFixed(1)+'% median return-time change vs previous 7 days ('+current.length+' vs '+previous.length+' observed returns)';
+
  const byDay=new Map();
  completed.forEach(r=>{const d=new Date(r.completedAt).toLocaleDateString();const v=byDay.get(d)||[];if(r.returnLatencyMs!=null)v.push(r.returnLatencyMs);byDay.set(d,v);});
  $('history').replaceChildren(...[...byDay].reverse().slice(0,30).map(([day,values])=>{
