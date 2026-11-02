@@ -168,6 +168,81 @@ chrome.windows.onFocusChanged.addListener(windowId => {
   chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
 });\n"""
     popup.write_text(s)
+
+    # Optional locally randomized A/B mode; no experimental data is uploaded.
+    bg = ext / "background.js"
+    s = bg.read_text()
+    s = replace_one(s,
+        "const anyGenerating = (state) => Object.keys(state.generating).length > 0;",
+        """const anyGenerating = (state) => Object.keys(state.generating).length > 0;
+const experimentAssignments = new Map();
+async function getExperimentAssignment(tabId) {
+  const { researchExperimentConsent = false, researchExperimentEnabled = false } =
+    await chrome.storage.local.get(['researchExperimentConsent','researchExperimentEnabled']);
+  if (!researchExperimentConsent || !researchExperimentEnabled) return 'observational';
+  if (experimentAssignments.has(tabId)) return experimentAssignments.get(tabId);
+  const rand = new Uint8Array(1);
+  crypto.getRandomValues(rand);
+  const condition = rand[0] < 128 ? 'treatment' : 'control';
+  experimentAssignments.set(tabId, condition);
+  return condition;
+}""",
+        "experimental assignment")
+    s = replace_one(s,
+        "const wantsPlay = (state, settings) => settings.enabled && (state.forced || anyGenerating(state));",
+        """const wantsPlay = (state, settings) => settings.enabled &&
+  (state.forced || Object.keys(state.generating).some(id => experimentAssignments.get(Number(id)) !== 'control'));""",
+        "experimental playback")
+    s = replace_one(s,
+        "if (!state.generating[tab.id]) await recordAnalyticsStart(tab.id, tab);",
+        """if (!state.generating[tab.id]) {
+            const condition = await getExperimentAssignment(tab.id);
+            await recordAnalyticsStart(tab.id, tab);
+            const rec = activeAnalytics.get(tab.id);
+            if (rec) {
+              rec.condition = condition;
+              rec.videoEnabled = condition !== 'control';
+            }
+          }""",
+        "record experiment condition")
+    s = replace_one(s,
+        "if (state.generating[tab.id]) await recordAnalyticsEnd(tab.id);",
+        """if (state.generating[tab.id]) await recordAnalyticsEnd(tab.id);
+          experimentAssignments.delete(tab.id);""",
+        "clear experiment condition")
+    bg.write_text(s)
+
+    html = ext / "popup.html"
+    s = html.read_text()
+    s = replace_one(s,
+        '  <button id="dashboard" type="button">My Focus Dashboard</button>',
+        """  <label class="row"><span>Opt into local A/B study
+      <small>Randomly disable videos for some responses; results stay on this device</small></span>
+      <input type="checkbox" id="researchconsent" class="switch">
+    </label>
+    <label class="row"><span>Enable local experiment</span>
+      <input type="checkbox" id="researchexperiment" class="switch">
+    </label>
+    <button id="dashboard" type="button">My Focus Dashboard</button>""",
+        "experiment consent controls")
+    html.write_text(s)
+    popup = ext / "popup.js"
+    s = popup.read_text()
+    s += """\\n(async () => {
+  const opts = await chrome.storage.local.get({researchExperimentConsent:false,researchExperimentEnabled:false});
+  $('researchconsent').checked = opts.researchExperimentConsent;
+  $('researchexperiment').checked = opts.researchExperimentEnabled && opts.researchExperimentConsent;
+  $('researchexperiment').disabled = !opts.researchExperimentConsent;
+  $('researchconsent').addEventListener('change',async e=>{
+    await chrome.storage.local.set({ researchExperimentConsent:e.target.checked,
+      researchExperimentEnabled:e.target.checked && $('researchexperiment').checked });
+    $('researchexperiment').disabled=!e.target.checked;
+    if(!e.target.checked) $('researchexperiment').checked=false;
+  });
+  $('researchexperiment').addEventListener('change',e=>
+    chrome.storage.local.set({researchExperimentEnabled:e.target.checked}));
+})();\\n"""
+    popup.write_text(s)
     with ZipFile(OUTPUT, "w", ZIP_DEFLATED) as z:
         for file in ext.rglob("*"):
             if file.is_file():
