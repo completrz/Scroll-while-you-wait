@@ -131,7 +131,7 @@ async function recordAnalyticsReturn(tabId) {
 }
 const DEFAULT_SETTINGS = {""", "analytics helpers")
     s = replace_one(s,
-        "if (msg.generating) state.generating[tab.id] = true;\\n        else delete state.generating[tab.id];",
+        "if (msg.generating) state.generating[tab.id] = true;\n        else delete state.generating[tab.id];",
         """if (msg.generating) {
           if (!state.generating[tab.id]) await recordAnalyticsStart(tab.id, tab);
           state.generating[tab.id] = true;
@@ -158,15 +158,15 @@ chrome.windows.onFocusChanged.addListener(windowId => {
     s = popup.read_text()
     s = replace_one(s,
         '  <button id="toggle" type="button">Play reels now</button>',
-        '  <button id="dashboard" type="button">My Focus Dashboard</button>\\n  <button id="toggle" type="button">Play reels now</button>',
+        '  <button id="dashboard" type="button">My Focus Dashboard</button>\n  <button id="toggle" type="button">Play reels now</button>',
         "dashboard button")
     popup.write_text(s)
 
     popup = ext / "popup.js"
     s = popup.read_text()
-    s += """\\n$('dashboard').addEventListener('click', () => {
+    s += """\n$('dashboard').addEventListener('click', () => {
   chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
-});\\n"""
+});\n"""
     popup.write_text(s)
     with ZipFile(OUTPUT, "w", ZIP_DEFLATED) as z:
         for file in ext.rglob("*"):
