@@ -31,15 +31,18 @@ class BuildTests(unittest.TestCase):
             js=z.read(base+"dashboard.js").decode()
             self.assertIn('id="week"', html)
             self.assertIn("previous 7 days", js)
-    def test_local_experiment_controls(self):
+    def test_session_study_controls(self):
         with zipfile.ZipFile(ZIP) as z:
             base="reels-while-you-wait/"
             html=z.read(base+"popup.html").decode()
             script=z.read(base+"background.js").decode()
-            self.assertIn('id="researchconsent"',html)
-            self.assertIn('id="researchexperiment"',html)
-            self.assertIn("getExperimentAssignment",script)
-            self.assertIn("state.generating[id] !== 'control'",script)
+            popup=z.read(base+"popup.js").decode()
+            self.assertIn('id="studyconsent"',html)
+            self.assertIn('id="studystart"',html)
+            self.assertIn('id="studyend"',html)
+            self.assertIn("currentFocusStudy",script)
+            self.assertIn("studySessionId",script)
+            self.assertIn("30*60*1000",popup)
     def test_no_remote_analytics(self):
         with zipfile.ZipFile(ZIP) as z:
             scripts="\n".join(z.read(n).decode("utf-8") for n in z.namelist() if n.endswith(".js"))
