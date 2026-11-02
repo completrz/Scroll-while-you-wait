@@ -169,83 +169,114 @@ chrome.windows.onFocusChanged.addListener(windowId => {
 });\n"""
     popup.write_text(s)
 
-    # Optional locally randomized A/B mode; no experimental data is uploaded.
+    # Session crossover experiment: optional 30-minute sessions, randomized
+    # first condition, alternate condition second. No per-response randomization.
     bg = ext / "background.js"
     s = bg.read_text()
     s = replace_one(s,
         "const anyGenerating = (state) => Object.keys(state.generating).length > 0;",
         """const anyGenerating = (state) => Object.keys(state.generating).length > 0;
-const experimentAssignments = new Map();
-async function getExperimentAssignment(tabId) {
-  const { researchExperimentConsent = false, researchExperimentEnabled = false } =
-    await chrome.storage.local.get(['researchExperimentConsent','researchExperimentEnabled']);
-  if (!researchExperimentConsent || !researchExperimentEnabled) return 'observational';
-  if (experimentAssignments.has(tabId)) return experimentAssignments.get(tabId);
-  const rand = new Uint8Array(1);
-  crypto.getRandomValues(rand);
-  const condition = rand[0] < 128 ? 'treatment' : 'control';
-  experimentAssignments.set(tabId, condition);
-  return condition;
+async function currentFocusStudy() {
+  const { focusStudy = null } = await chrome.storage.local.get('focusStudy');
+  if (!focusStudy || !focusStudy.consent || !focusStudy.active) return null;
+  if (Date.now() >= focusStudy.endsAt) {
+    await chrome.storage.local.set({focusStudy: {...focusStudy, active:false, endedAt:Date.now()}});
+    return null;
+  }
+  return focusStudy;
+}
+async function studyCondition() {
+  const study = await currentFocusStudy();
+  return study ? study.condition : 'observational';
 }""",
-        "experimental assignment")
+        "session experiment helper")
     s = replace_one(s,
         "const wantsPlay = (state, settings) => settings.enabled && (state.forced || anyGenerating(state));",
         """const wantsPlay = (state, settings) => settings.enabled &&
-  (state.forced || Object.keys(state.generating).some(id => state.generating[id] !== 'control'));""",
-        "experimental playback")
+  (state.forced || (anyGenerating(state) && state.focusStudyCondition !== 'control'));""",
+        "session condition playback")
+    s = replace_one(s,
+        "if (msg.generating) {",
+        """if (msg.generating) {
+          state.focusStudyCondition = await studyCondition();""",
+        "study playback condition")
     s = replace_one(s,
         "if (!state.generating[tab.id]) await recordAnalyticsStart(tab.id, tab);",
         """if (!state.generating[tab.id]) {
-            const condition = await getExperimentAssignment(tab.id);
             await recordAnalyticsStart(tab.id, tab);
             const rec = activeAnalytics.get(tab.id);
             if (rec) {
-              rec.condition = condition;
-              rec.videoEnabled = condition !== 'control';
+              const study = await currentFocusStudy();
+              rec.condition = study ? study.condition : 'observational';
+              rec.studySessionId = study ? study.sessionId : '';
+              rec.videoEnabled = settings.enabled && (!study || study.condition === 'treatment');
             }
           }""",
-        "record experiment condition")
-    s = replace_one(s,
-        "state.generating[tab.id] = true;",
-        "state.generating[tab.id] = state.generating[tab.id] || (await getExperimentAssignment(tab.id));",
-        "persist A/B assignment in session state")
-    s = replace_one(s,
-        "if (state.generating[tab.id]) await recordAnalyticsEnd(tab.id);",
-        """if (state.generating[tab.id]) await recordAnalyticsEnd(tab.id);
-          experimentAssignments.delete(tab.id);""",
-        "clear experiment condition")
+        "session response metadata")
     bg.write_text(s)
 
     html = ext / "popup.html"
     s = html.read_text()
     s = replace_one(s,
         '  <button id="dashboard" type="button">My Focus Dashboard</button>',
-        """  <label class="row"><span>Opt into local A/B study
-      <small>Randomly disable videos for some responses; results stay on this device</small></span>
-      <input type="checkbox" id="researchconsent" class="switch">
-    </label>
-    <label class="row"><span>Enable local experiment</span>
-      <input type="checkbox" id="researchexperiment" class="switch">
-    </label>
+        """  <section aria-label="Optional focus study">
+      <strong>Optional Focus Study</strong>
+      <small>Two 30-minute work sessions: normal workflow and video-assisted.
+      Session order is random. Results stay on this browser.</small>
+      <label class="row"><span>I agree to participate locally</span>
+        <input type="checkbox" id="studyconsent" class="switch"></label>
+      <div id="studystatus" role="status"></div>
+      <button id="studystart" type="button">Start next 30-minute session</button>
+      <button id="studyend" type="button">End study session</button>
+    </section>
     <button id="dashboard" type="button">My Focus Dashboard</button>""",
-        "experiment consent controls")
+        "focus study UI")
     html.write_text(s)
     popup = ext / "popup.js"
     s = popup.read_text()
     s += """
 (async () => {
-  const opts = await chrome.storage.local.get({researchExperimentConsent:false,researchExperimentEnabled:false});
-  $('researchconsent').checked = opts.researchExperimentConsent;
-  $('researchexperiment').checked = opts.researchExperimentEnabled && opts.researchExperimentConsent;
-  $('researchexperiment').disabled = !opts.researchExperimentConsent;
-  $('researchconsent').addEventListener('change',async e=>{
-    await chrome.storage.local.set({ researchExperimentConsent:e.target.checked,
-      researchExperimentEnabled:e.target.checked && $('researchexperiment').checked });
-    $('researchexperiment').disabled=!e.target.checked;
-    if(!e.target.checked) $('researchexperiment').checked=false;
+  const consent = $('studyconsent'), start = $('studystart'), end = $('studyend');
+  const status = $('studystatus');
+  async function refreshStudy() {
+    const { focusStudy = null } = await chrome.storage.local.get('focusStudy');
+    const active = !!(focusStudy && focusStudy.active && Date.now() < focusStudy.endsAt);
+    consent.checked = !!focusStudy?.consent;
+    start.disabled = !consent.checked || active || (focusStudy?.completed || 0) >= 2;
+    end.disabled = !active;
+    status.textContent = active
+      ? 'Active: '+(focusStudy.condition === 'control' ? 'normal workflow (no auto-video)' : 'video-assisted')+
+        ' — ends '+new Date(focusStudy.endsAt).toLocaleTimeString()
+      : (focusStudy?.completed || 0) >= 2 ? 'Both study sessions completed'
+      : 'Completed: '+(focusStudy?.completed || 0)+'/2 sessions';
+  }
+  consent.addEventListener('change', async () => {
+    const {focusStudy = {completed:0}} = await chrome.storage.local.get('focusStudy');
+    await chrome.storage.local.set({focusStudy:{...focusStudy,consent:consent.checked,
+      active:consent.checked && !!focusStudy.active}});
+    await refreshStudy();
   });
-  $('researchexperiment').addEventListener('change',e=>
-    chrome.storage.local.set({researchExperimentEnabled:e.target.checked}));
+  start.addEventListener('click',async()=>{
+    const {focusStudy = {completed:0}} = await chrome.storage.local.get('focusStudy');
+    if (!focusStudy.consent || focusStudy.active || focusStudy.completed >= 2) return;
+    const first = focusStudy.firstCondition ||
+      (crypto.getRandomValues(new Uint8Array(1))[0] < 128 ? 'control':'treatment');
+    const condition = focusStudy.completed === 0 ? first :
+      (first === 'control' ? 'treatment' : 'control');
+    const now = Date.now();
+    await chrome.storage.local.set({focusStudy:{...focusStudy, firstCondition:first,
+      condition, active:true, startedAt:now, endsAt:now+30*60*1000,
+      sessionId:crypto.randomUUID()}});
+    await refreshStudy();
+  });
+  end.addEventListener('click',async()=>{
+    const {focusStudy} = await chrome.storage.local.get('focusStudy');
+    if(!focusStudy?.active)return;
+    await chrome.storage.local.set({focusStudy:{...focusStudy,active:false,
+      completed:Math.min(2,(focusStudy.completed||0)+1),endedAt:Date.now()}});
+    await refreshStudy();
+  });
+  await refreshStudy();
 })();
 """
     popup.write_text(s)
