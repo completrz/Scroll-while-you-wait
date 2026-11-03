@@ -1,12 +1,13 @@
 ![Reels While You Wait](assets/banner.png)
 # Reels While You Wait
 
-A Chrome extension that plays short-form video while an AI chatbot is thinking, and pauses it the moment the answer is ready.
+A Chrome extension that plays short-form videos while an AI chatbot generates a response, then pauses and minimizes the video window when the answer is ready.
 
-Send a message in ChatGPT, Claude, Gemini or another supported chat. A small window opens beside your chat with Instagram Reels, YouTube Shorts or TikTok. It plays and auto-scrolls while the AI writes. When the response finishes, the video pauses.
+Send a message in ChatGPT, Claude, Gemini or another supported chat. A small window opens beside your chat with Instagram Reels, YouTube Shorts or TikTok. It plays and auto-scrolls while the AI writes. When the response finishes, playback pauses and the video window automatically minimizes. The window returns when another response starts.
 
 ## Contents
 
+- [Why I made it](#why-i-made-it)
 - [Features](#features)
 - [Install](#install)
 - [First run](#first-run)
@@ -19,9 +20,19 @@ Send a message in ChatGPT, Claude, Gemini or another supported chat. A small win
 - [Customizing](#customizing)
 - [Project structure](#project-structure)
 
+## Why I made it
+
+This started as a fun experiment inspired by a familiar habit: you ask an AI a question, wait for it to answer, and open something else to pass the time. What was supposed to be a quick glance at your phone or another tab turns into scrolling, and by the time you return, you've lost track of what you were doing.
+
+**Reels While You Wait explores a possible alternative:** keep the distraction tied to the wait itself. Instead of switching away and forgetting to come back, a video window appears while the AI is responding, then pauses and minimizes as soon as the answer is ready. The idea is that a clear stopping cue *might* make it easier to return to the original task.
+
+This is **a hypothesis, not a proven productivity benefit**. Short-form videos can be distracting in their own right, and the extension may make things worse for some people. It's an optional, playful tool for people who already tend to scroll while waiting, not a recommendation to start doing so.
+
 ## Features
 
-- **Opens and plays automatically** when a response starts generating, and **pauses** when it finishes.
+- **Opens and plays automatically** when a response starts generating, then **pauses and minimizes** when it finishes.
+- **Restores the video window** when another response starts.
+- **Optional auto-minimize toggle** in the extension popup.
 - **Three video sources:** Instagram Reels, YouTube Shorts and TikTok.
 - **Auto-scroll:** moves to the next video when the current one ends or loops, only while an AI is generating.
 - **Doesn't steal focus.** You keep typing in your chat while the video window sits beside it.
@@ -59,12 +70,13 @@ Click the extension icon to open the popup.
 | **Enabled** | Master switch. When off, nothing opens or plays. |
 | **Play from** | Instagram Reels, YouTube Shorts or TikTok. Changing it navigates an open window to the new source. |
 | **Auto-scroll** | Advance to the next video when one ends or loops. On by default. |
+| **Auto-minimize on completion** | Minimize the video window after an AI response finishes; restore it for the next response. |
 | **Bring window to front** | When on, the video window keeps focus when it opens. Off by default so you stay in your chat. |
 | **Play reels now / Pause reels** | Manual override, handy for testing. Pausing also clears a stuck "generating" state. |
 
 The line under the title shows the current status. On a chat tab it also reads **This tab: watching for responses ✓** when detection is active there.
 
-**Closing the window** is respected: it won't reopen until the next response starts. If you leave it open, it stays paused between responses and is raised to the front when the next one begins, with focus handed straight back to your chat.
+**Closing the window** is respected: it won't reopen until the next response starts. With auto-minimize enabled, the extension pauses and minimizes the video window between responses, then restores it for the next response. If auto-minimize is disabled, the window remains paused between responses.
 
 ## Supported sites
 
@@ -130,7 +142,7 @@ It triggers when a video ends or loops, so a long video plays through once first
 ## Limitations
 
 - Autoplay with sound needs a click in the video window first. Until then videos play muted.
-- A fully covered or minimized window can't play video. The extension restores a minimized window when a response starts.
+- A fully covered or minimized window can't play video. The extension restores its minimized video window when a response starts.
 - Selectors are best-effort. Chat sites change their interfaces, and the extension may need small updates to keep up.
 - Raising the existing window briefly takes focus before handing it back to your chat, which may cause a brief flicker on some systems.
 - If your chat window is maximized, it can cover the video window on the right edge. Move the video window once to fix it.
